@@ -1,36 +1,104 @@
 package util;
 
 import java.io.File;
+import java.lang.reflect.Method;
+import java.net.JarURLConnection;
 import java.net.URL;
+import java.net.URLDecoder;
 import java.util.ArrayList;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 import annotation.Controller;
+import annotation.UrlMapping;
 
 public class ClasseUtilitaire {
 
     public List<String> findController(String packageClasse) throws Exception {
-        List<String> liste = new ArrayList<>();
+        Set<String> liste = new LinkedHashSet<>();
         ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
-        URL resource = classLoader.getResource(packageClasse);
+        Enumeration<URL> resources = classLoader.getResources(packageClasse.replace(".", "/"));
 
-        if (resource == null) {
-            return liste;
+        while (resources.hasMoreElements()) {
+            URL resource = resources.nextElement();
+
+            if ("file".equals(resource.getProtocol())) {
+                File dossier = new File(URLDecoder.decode(resource.getFile(), "UTF-8"));
+                scanDossierController(dossier, packageClasse, liste);
+            } else if ("jar".equals(resource.getProtocol())) {
+                scanJarController(resource, packageClasse, liste);
+            }
         }
-        File dossier = new File(resource.getFile().replace("%20", " "));
 
-        if (dossier.exists() && dossier.isDirectory()) {
-            for (File fichier : dossier.listFiles()) {
-                if (fichier.getName().endsWith(".class")) {
-                    String nomClasseSeul = fichier.getName().substring(0, fichier.getName().length() - 6);
-                    String nomComplet = packageClasse + "." + nomClasseSeul;
+        return new ArrayList<>(liste);
+    }
 
-                    Class<?> clazz = Class.forName(nomComplet);
-                    if (clazz.isAnnotationPresent(Controller.class)) {
-                        liste.add(nomComplet); 
-                    }
+    private void scanDossierController(File dossier, String packageClasse, Set<String> liste) throws Exception {
+        if (!dossier.exists() || !dossier.isDirectory()) {
+            return;
+        }
+
+        File[] fichiers = dossier.listFiles();
+        if (fichiers == null) {
+            return;
+        }
+
+        for (File fichier : fichiers) {
+            if (fichier.getName().endsWith(".class")) {
+                String nomClasseSeul = fichier.getName().substring(0, fichier.getName().length() - 6);
+                ajouterControllerSiAnnote(packageClasse + "." + nomClasseSeul, liste);
+            }
+        }
+    }
+
+    private void scanJarController(URL resource, String packageClasse, Set<String> liste) throws Exception {
+        String packagePath = packageClasse.replace(".", "/") + "/";
+        JarURLConnection connection = (JarURLConnection) resource.openConnection();
+
+        try (JarFile jarFile = connection.getJarFile()) {
+            Enumeration<JarEntry> entries = jarFile.entries();
+
+            while (entries.hasMoreElements()) {
+                JarEntry entry = entries.nextElement();
+                String nomEntry = entry.getName();
+
+                if (nomEntry.startsWith(packagePath) && nomEntry.endsWith(".class") && !nomEntry.substring(packagePath.length()).contains("/")) {
+                    String nomClasseSeul = nomEntry.substring(packagePath.length(), nomEntry.length() - 6);
+                    ajouterControllerSiAnnote(packageClasse + "." + nomClasseSeul, liste);
                 }
             }
         }
-        return liste;
+    }
+
+    private void ajouterControllerSiAnnote(String nomComplet, Set<String> liste) throws Exception {
+        Class<?> clazz = Class.forName(nomComplet);
+        if (clazz.isAnnotationPresent(Controller.class)) {
+            liste.add(nomComplet);
+        }
+    }
+
+    public Map<String, Mapping> findUrlMappings(String packageClasse) throws Exception {
+        Map<String, Mapping> mappings = new HashMap<>();
+        List<String> controllers = findController(packageClasse);
+
+        for (String nomController : controllers) {
+            Class<?> clazz = Class.forName(nomController);
+
+            for (Method methode : clazz.getDeclaredMethods()) {
+                if (methode.isAnnotationPresent(UrlMapping.class)) {
+                    UrlMapping annotation = methode.getAnnotation(UrlMapping.class);
+                    String url = annotation.value();
+
+                    mappings.put(url, new Mapping(nomController, methode.getName()));
+                }
+            }
+        }
+
+        return mappings;
     }
 }
