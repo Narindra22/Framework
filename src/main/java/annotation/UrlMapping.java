@@ -6,5 +6,5 @@ import java.lang.annotation.*;
 @Target(ElementType.METHOD)        // Indique que ce post-it se colle UNIQUEMENT sur des méthodes
 public @interface UrlMapping {
     String value(); // Permet de passer l'URL en paramètre (ex: @UrlMapping("/emplist"))
-    
+    String method() default "GET";
 }

@@ -4,12 +4,15 @@ APP_NAME="framework"
 SRC_DIR="src/main/java"
 BUILD_DIR="build"
 LIB_DIR="lib"                  # Adapté à ton dossier '__lib'
+JAVA_RELEASE="17"
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # ==============================================================================
 # CONFIGURATION DU CHEMIN VERS L'APPLICATION DE TEST
 # ==============================================================================
 # On remplace les "???" par le chemin qui monte d'un niveau pour aller dans l'application de test
-APP_TEST_WEBAPPS="/home/narindra/Documents/S5/Mr_Naina/Testapplication/src/main/webapp"
+APP_TEST_WEBAPPS="$SCRIPT_DIR/../Testapplication/src/main/webapp"
 # ==============================================================================
 
 echo "1-Nettoyage et création du répertoire temporaire"
@@ -19,8 +22,8 @@ mkdir -p "$BUILD_DIR/lib"
 
 echo " 2-Compilation des fichiers Java"
 # On cherche tous les fichiers .java et on les compile en incluant le contenu de __lib
-find $SRC_DIR -name "*.java" > sources.txt
-javac -cp ".:$LIB_DIR/*" -d $BUILD_DIR/classes @sources.txt 
+find "$SRC_DIR" -name "*.java" > sources.txt
+javac --release "$JAVA_RELEASE" -cp ".:$LIB_DIR/*" -d "$BUILD_DIR/classes" @sources.txt
 
 if [ $? -ne 0 ]; then
     echo "❌ Erreur de compilation ! Le script s'arrête."

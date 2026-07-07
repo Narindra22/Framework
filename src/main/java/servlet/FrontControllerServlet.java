@@ -11,12 +11,13 @@ import jakarta.servlet.http.*;
 
 import util.ClasseUtilitaire; // On importe notre classe utilitaire simple
 import util.Mapping;
+import util.UrlMethode;
 
 public class FrontControllerServlet extends HttpServlet {
     
     // Déclaration de la liste pour stocker les noms des contrôleurs trouvés
     private List<String> listNomController = new ArrayList<>();
-    private Map<String, Mapping> urlMappings = new HashMap<>();
+    private Map<UrlMethode, Mapping> urlMappings = new HashMap<>();
     private ClasseUtilitaire util = new ClasseUtilitaire();
 
     @Override
@@ -54,6 +55,7 @@ public class FrontControllerServlet extends HttpServlet {
         String url = req.getRequestURI();
         String contextPath = req.getContextPath();
         String route = url.substring(contextPath.length());
+        String methodeHttp = req.getMethod();
 
         if (url.endsWith("test.html")) {
             res.setContentType("text/html;charset=UTF-8");
@@ -64,11 +66,12 @@ public class FrontControllerServlet extends HttpServlet {
                 afficherControllers(out);
                 out.println();
 
-                Mapping mapping = urlMappings.get(route);
+                UrlMethode urlMethode = new UrlMethode(route, methodeHttp);
+                Mapping mapping = urlMappings.get(urlMethode);
 
                 if (mapping == null) {
                     res.setStatus(HttpServletResponse.SC_NOT_FOUND);
-                    out.println("Aucune méthode trouvée pour l'URL : " + route);
+                    out.println("Aucune méthode trouvée pour l'URL : " + route + " en " + methodeHttp);
                     out.println();
                     afficherUrlsDisponibles(out);
                     return;
@@ -76,6 +79,7 @@ public class FrontControllerServlet extends HttpServlet {
 
                 Object resultat = executeMapping(mapping);
                 out.println("URL trouvée : " + route);
+                out.println("Méthode HTTP : " + methodeHttp);
                 out.println("Controller : " + mapping.getClassName());
                 out.println("Méthode : " + mapping.getMethodName());
                 out.println("Résultat : " + resultat);
@@ -104,9 +108,10 @@ public class FrontControllerServlet extends HttpServlet {
             return;
         }
 
-        for (Map.Entry<String, Mapping> entry : urlMappings.entrySet()) {
+        for (Map.Entry<UrlMethode, Mapping> entry : urlMappings.entrySet()) {
             Mapping mapping = entry.getValue();
-            out.println("-> " + entry.getKey() + " : " + mapping.getClassName() + "." + mapping.getMethodName() + "()");
+            UrlMethode urlMethode = entry.getKey();
+            out.println("-> [" + urlMethode.getMethode() + "] " + urlMethode.getUrl() + " : " + mapping.getClassName() + "." + mapping.getMethodName() + "()");
         }
     }
 

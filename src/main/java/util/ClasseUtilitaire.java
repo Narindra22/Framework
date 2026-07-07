@@ -82,8 +82,8 @@ public class ClasseUtilitaire {
         }
     }
 
-    public Map<String, Mapping> findUrlMappings(String packageClasse) throws Exception {
-        Map<String, Mapping> mappings = new HashMap<>();
+    public Map<UrlMethode, Mapping> findUrlMappings(String packageClasse) throws Exception {
+        Map<UrlMethode, Mapping> mappings = new HashMap<>();
         List<String> controllers = findController(packageClasse);
 
         for (String nomController : controllers) {
@@ -92,9 +92,9 @@ public class ClasseUtilitaire {
             for (Method methode : clazz.getDeclaredMethods()) {
                 if (methode.isAnnotationPresent(UrlMapping.class)) {
                     UrlMapping annotation = methode.getAnnotation(UrlMapping.class);
-                    String url = annotation.value();
+                    UrlMethode urlMethode = new UrlMethode(annotation.value(), annotation.method());
 
-                    mappings.put(url, new Mapping(nomController, methode.getName()));
+                    mappings.put(urlMethode, new Mapping(nomController, methode.getName()));
                 }
             }
         }
