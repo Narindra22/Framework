@@ -10,6 +10,7 @@ import jakarta.servlet.*;
 import jakarta.servlet.http.*;
 
 import util.Mapping;
+import util.ModelAndView;
 import util.UrlMethode;
 
 public class FrontControllerServlet extends HttpServlet {
@@ -19,6 +20,7 @@ public class FrontControllerServlet extends HttpServlet {
     private Map<UrlMethode, Mapping> urlMappings = new HashMap<>();
 
     @Override
+    @SuppressWarnings("unchecked")
     public void init() throws ServletException {
         super.init();
 
@@ -57,29 +59,24 @@ public class FrontControllerServlet extends HttpServlet {
             res.setContentType("text/html;charset=UTF-8");
             req.getServletContext().getNamedDispatcher("default").forward(req, res);
         } else {
-            res.setContentType("text/plain;charset=UTF-8");
-            try (PrintWriter out = res.getWriter()) {
-                afficherControllers(out);
-                out.println();
+            UrlMethode urlMethode = new UrlMethode(route, methodeHttp);
+            Mapping mapping = urlMappings.get(urlMethode);
 
-                UrlMethode urlMethode = new UrlMethode(route, methodeHttp);
-                Mapping mapping = urlMappings.get(urlMethode);
-
-                if (mapping == null) {
-                    res.setStatus(HttpServletResponse.SC_NOT_FOUND);
+            if (mapping == null) {
+                res.setContentType("text/plain;charset=UTF-8");
+                res.setStatus(HttpServletResponse.SC_NOT_FOUND);
+                try (PrintWriter out = res.getWriter()) {
                     out.println("Aucune méthode trouvée pour l'URL : " + route + " en " + methodeHttp);
                     out.println();
                     afficherUrlsDisponibles(out);
-                    return;
                 }
-
-                Object resultat = executeMapping(mapping);
-                out.println("URL trouvée : " + route);
-                out.println("Méthode HTTP : " + methodeHttp);
-                out.println("Controller : " + mapping.getClassName());
-                out.println("Méthode : " + mapping.getMethodName());
-                out.println("Résultat : " + resultat);
+                return;
             }
+
+            ModelAndView modelAndView = executeMapping(mapping);
+            addArgToRequest(req, modelAndView.getData());
+            RequestDispatcher dispatcher = req.getRequestDispatcher(modelAndView.getView());
+            dispatcher.forward(req, res);
         }
     }
 
@@ -111,15 +108,26 @@ public class FrontControllerServlet extends HttpServlet {
         }
     }
 
-    private Object executeMapping(Mapping mapping) throws ServletException {
+    private ModelAndView executeMapping(Mapping mapping) throws ServletException {
         try {
             Class<?> clazz = Class.forName(mapping.getClassName());
             Object controller = clazz.getDeclaredConstructor().newInstance();
             Method methode = clazz.getDeclaredMethod(mapping.getMethodName());
+            Object resultat = methode.invoke(controller);
 
-            return methode.invoke(controller);
+            if (!(resultat instanceof ModelAndView)) {
+                throw new ServletException("La méthode " + mapping.getClassName() + "." + mapping.getMethodName() + "() doit retourner ModelAndView");
+            }
+
+            return (ModelAndView) resultat;
         } catch (Exception e) {
             throw new ServletException("Erreur pendant l'exécution du mapping", e);
+        }
+    }
+
+    private void addArgToRequest(HttpServletRequest req, Map<String, Object> data) {
+        for (Map.Entry<String, Object> entry : data.entrySet()) {
+            req.setAttribute(entry.getKey(), entry.getValue());
         }
     }
 }

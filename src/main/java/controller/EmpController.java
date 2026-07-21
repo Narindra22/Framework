@@ -2,22 +2,29 @@ package controller;
 
 import annotation.Controller;
 import annotation.UrlMapping;
+import util.ModelAndView;
 
 @Controller
 public class EmpController {
 
     @UrlMapping("/emp/list")
-    public String list() {
-        return "Liste des employés";
+    public ModelAndView list() {
+        ModelAndView modelAndView = new ModelAndView("/emp/list.jsp");
+        modelAndView.addAttribut("message", "Liste des employés");
+        return modelAndView;
     }
 
     @UrlMapping("/emp/create")
-    public String create() {
-        return "Création d'un employé";
+    public ModelAndView create() {
+        ModelAndView modelAndView = new ModelAndView("/emp/create.jsp");
+        modelAndView.addAttribut("message", "Création d'un employé");
+        return modelAndView;
     }
 
     @UrlMapping("/emp/andrana")
-    public String andrana() {
-        return "Andrana";
+    public ModelAndView andrana() {
+        ModelAndView modelAndView = new ModelAndView("/emp/andrana.jsp");
+        modelAndView.addAttribut("message", "Andrana");
+        return modelAndView;
     }
 }
