@@ -10,6 +10,8 @@ import jakarta.servlet.*;
 import jakarta.servlet.http.*;
 
 import util.Mapping;
+import util.ModelAndView;
+import util.Util;
 import util.UrlMethode;
 
 public class FrontControllerServlet extends HttpServlet {
@@ -17,14 +19,18 @@ public class FrontControllerServlet extends HttpServlet {
     // Déclaration de la liste pour stocker les noms des contrôleurs trouvés
     private List<String> listNomController = new ArrayList<>();
     private Map<UrlMethode, Mapping> urlMappings = new HashMap<>();
+    private Object springContext;
+    private Class<?> webApplicationContextClass;
 
     @Override
+    @SuppressWarnings("unchecked")
     public void init() throws ServletException {
         super.init();
 
         ServletContext context = getServletContext();
         Object controllersAttribute = context.getAttribute(FrontControllerListner.CONTROLLERS_ATTRIBUTE);
         Object urlMappingsAttribute = context.getAttribute(FrontControllerListner.URL_MAPPINGS_ATTRIBUTE);
+        springContext = context.getAttribute("springContext");
 
         if (controllersAttribute instanceof List<?>) {
             listNomController = (List<String>) controllersAttribute;
@@ -32,6 +38,12 @@ public class FrontControllerServlet extends HttpServlet {
 
         if (urlMappingsAttribute instanceof Map<?, ?>) {
             urlMappings = (Map<UrlMethode, Mapping>) urlMappingsAttribute;
+        }
+
+        try {
+            webApplicationContextClass = Class.forName("org.springframework.web.context.WebApplicationContext");
+        } catch (ClassNotFoundException e) {
+            webApplicationContextClass = null;
         }
     }
 
@@ -57,29 +69,24 @@ public class FrontControllerServlet extends HttpServlet {
             res.setContentType("text/html;charset=UTF-8");
             req.getServletContext().getNamedDispatcher("default").forward(req, res);
         } else {
-            res.setContentType("text/plain;charset=UTF-8");
-            try (PrintWriter out = res.getWriter()) {
-                afficherControllers(out);
-                out.println();
+            UrlMethode urlMethode = new UrlMethode(route, methodeHttp);
+            Mapping mapping = urlMappings.get(urlMethode);
 
-                UrlMethode urlMethode = new UrlMethode(route, methodeHttp);
-                Mapping mapping = urlMappings.get(urlMethode);
-
-                if (mapping == null) {
-                    res.setStatus(HttpServletResponse.SC_NOT_FOUND);
+            if (mapping == null) {
+                res.setContentType("text/plain;charset=UTF-8");
+                res.setStatus(HttpServletResponse.SC_NOT_FOUND);
+                try (PrintWriter out = res.getWriter()) {
                     out.println("Aucune méthode trouvée pour l'URL : " + route + " en " + methodeHttp);
                     out.println();
                     afficherUrlsDisponibles(out);
-                    return;
                 }
-
-                Object resultat = executeMapping(mapping);
-                out.println("URL trouvée : " + route);
-                out.println("Méthode HTTP : " + methodeHttp);
-                out.println("Controller : " + mapping.getClassName());
-                out.println("Méthode : " + mapping.getMethodName());
-                out.println("Résultat : " + resultat);
+                return;
             }
+
+            ModelAndView modelAndView = executeMapping(mapping);
+            addArgToRequest(req, modelAndView.getData());
+            RequestDispatcher dispatcher = req.getRequestDispatcher(modelAndView.getView());
+            dispatcher.forward(req, res);
         }
     }
 
@@ -111,15 +118,49 @@ public class FrontControllerServlet extends HttpServlet {
         }
     }
 
-    private Object executeMapping(Mapping mapping) throws ServletException {
+    private ModelAndView executeMapping(Mapping mapping) throws ServletException {
         try {
             Class<?> clazz = Class.forName(mapping.getClassName());
             Object controller = clazz.getDeclaredConstructor().newInstance();
-            Method methode = clazz.getDeclaredMethod(mapping.getMethodName());
+            Method methode = getControllerMethod(clazz, mapping.getMethodName());
+            Object resultat;
 
-            return methode.invoke(controller);
+            if (webApplicationContextClass != null && Util.haveParameter(methode, webApplicationContextClass)) {
+                if (springContext == null) {
+                    throw new ServletException("Pas de springContext disponible dans le ServletContext");
+                }
+
+                Object webApplicationContext = webApplicationContextClass.cast(springContext);
+                resultat = methode.invoke(controller, webApplicationContext);
+            } else {
+                resultat = methode.invoke(controller);
+            }
+
+            if (!(resultat instanceof ModelAndView)) {
+                throw new ServletException("La méthode " + mapping.getClassName() + "." + mapping.getMethodName() + "() doit retourner ModelAndView");
+            }
+
+            return (ModelAndView) resultat;
+        } catch (ServletException e) {
+            throw e;
         } catch (Exception e) {
             throw new ServletException("Erreur pendant l'exécution du mapping", e);
+        }
+    }
+
+    private Method getControllerMethod(Class<?> clazz, String methodName) throws NoSuchMethodException {
+        for (Method methode : clazz.getDeclaredMethods()) {
+            if (methode.getName().equals(methodName)) {
+                return methode;
+            }
+        }
+
+        throw new NoSuchMethodException(methodName);
+    }
+
+    private void addArgToRequest(HttpServletRequest req, Map<String, Object> data) {
+        for (Map.Entry<String, Object> entry : data.entrySet()) {
+            req.setAttribute(entry.getKey(), entry.getValue());
         }
     }
 }
