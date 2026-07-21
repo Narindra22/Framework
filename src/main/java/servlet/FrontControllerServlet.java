@@ -9,7 +9,6 @@ import java.util.Map;
 import jakarta.servlet.*;
 import jakarta.servlet.http.*;
 
-import util.ClasseUtilitaire; // On importe notre classe utilitaire simple
 import util.Mapping;
 import util.UrlMethode;
 
@@ -18,24 +17,21 @@ public class FrontControllerServlet extends HttpServlet {
     // Déclaration de la liste pour stocker les noms des contrôleurs trouvés
     private List<String> listNomController = new ArrayList<>();
     private Map<UrlMethode, Mapping> urlMappings = new HashMap<>();
-    private ClasseUtilitaire util = new ClasseUtilitaire();
 
     @Override
     public void init() throws ServletException {
-        try {
-            super.init();
-            System.out.println("Démarrage du scan manuel...");
-            
-            // On veut chercher les classes dans le package nommé "controller"
-            String packageClasse = "controller";
+        super.init();
 
-            // Remplissage de la liste avec notre méthode utilitaire
-            listNomController = util.findController(packageClasse);
-            urlMappings = util.findUrlMappings(packageClasse);
+        ServletContext context = getServletContext();
+        Object controllersAttribute = context.getAttribute(FrontControllerListner.CONTROLLERS_ATTRIBUTE);
+        Object urlMappingsAttribute = context.getAttribute(FrontControllerListner.URL_MAPPINGS_ATTRIBUTE);
 
-        } catch (Exception e) {
-            e.printStackTrace();
-            throw new ServletException("Échec du scan au démarrage : " + e.getMessage(), e);
+        if (controllersAttribute instanceof List<?>) {
+            listNomController = (List<String>) controllersAttribute;
+        }
+
+        if (urlMappingsAttribute instanceof Map<?, ?>) {
+            urlMappings = (Map<UrlMethode, Mapping>) urlMappingsAttribute;
         }
     }
 
